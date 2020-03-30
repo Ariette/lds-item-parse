@@ -1,7 +1,7 @@
 import requests
 import re
 import concurrent.futures
-import lxml.html as lxml
+from bs4 import BeautifulSoup, SoupStrainer
 import json
 import multiprocessing
 import time
@@ -12,7 +12,6 @@ max_page_id = 0
 
 list_page_url_regex = r'<li class=\"current\"><a href=\"https://na\.finalfantasyxiv\.com/lodestone/playguide/db/item/\?page=(\d+)\">'
 list_page_item_url_regex = r'<a href=\"\/lodestone\/playguide\/db\/item\/([a-f0-9]{11})\/\">'
-item_content_regex = re.compile(r'.*<div class=\"db_cnts\">(.*?)<a name=\"comment\">.*', re.DOTALL)
 
 # find highest pageid
 page = requests.get('%s%i' % (list_base_url, 100000))
@@ -44,36 +43,36 @@ def process_item(parsed_items, lds_id):
                 print('Faild to process : ' + "%s%s/" % (item_base_url, lds_id))
                 return
 
-    item_html = '<div><div class="db_cnts">' + re.match(item_content_regex, html).group(1)
-    item_page = lxml.fromstring(item_html)
-    item_name = str(item_page.xpath("//h2[contains(@class,'db-view__item__text__name')]/text()")[0]).strip().replace("\ue03c", "")
+    item_html = SoupStrainer(class_="db_cnts")
+    item_page = BeautifulSoup(html, features='html.parser', parse_only=item_html)
+    item_name = item_page.find('h2', attrs={'class': 'db-view__item__text__name'}).get_text(strip=True).replace("\ue03c", "")
 
     # class = db__l_main db__l_main__view
-    item_acquire_list = item_page.xpath("//div[@class='db-view__data__inner--select_reward']")
-    if len(item_acquire_list):
-        title = item_acquire_list[0].xpath(".//h4")[0].text_content().strip()
+    item_acquire_list = item_page.find('div', attrs={'class': 'db-view__data__inner--select_reward'})
+    if item_acquire_list:
+        title = item_acquire_list.find('h4').get_text(strip=True)
         if title == 'Acquired From':
-            item_acquire_list = item_acquire_list[0].xpath(".//li[contains(@class,'db-view__data__item_list')]")
+            item_acquire_list = item_acquire_list.find_all('li', attrs={'class': 'db-view__data__item_list'})
             item_acquires = []
             for acquire in item_acquire_list:
-                acquire_name = acquire.xpath(".//div[@class='db-view__data__reward__item__name']")[0].text_content().strip()
+                acquire_name = acquire.find('div', attrs={'class': 'db-view__data__reward__item__name'}).get_text(strip=True)
                 item_acquires.append(acquire_name)
 
     # class= db__l_main db__l_main__base
-    item_base_list = item_page.xpath("//div[contains(@class,'db__l_main db__l_main__base')]")
+    item_base_list = item_page.find_all('div', attrs={'class': 'db__l_main db__l_main__base'})
     for base in item_base_list:
-        title = base.xpath(".//h3")[0].text_content().strip()
+        title = base.find('h3').get_text(strip=True)
         if title == 'Dropped By':
-            item_mob_list = base.xpath(".//tbody/tr")
+            item_mob_list = base.find('tbody').find_all('tr')
             item_mobs = []
             for mob in item_mob_list:
-                mob_name = mob.xpath(".//td[contains(@class,'db-table__body--light')]/a[contains(@class,'db-table__txt--detail_link')]")[0].text_content().strip()
+                mob_name = mob.find('td', attrs={'class': 'db-table__body--light'}).find('a', attrs={'class': 'db-table__txt--detail_link'}).get_text(strip=True)
                 item_mobs.append(mob_name)
         if title == 'Related Duties':
-            item_instance_list = base.xpath(".//tbody/tr")
+            item_instance_list = base.find('tbody').find_all('tr')
             item_instances = []
             for instance in item_instance_list:
-                instance_name = instance.xpath(".//td[contains(@class,'db-table__body--light')]/a[contains(@class,'db-table__txt--detail_link')]")[0].text_content().strip()
+                instance_name = instance.find('td', attrs={'class': 'db-table__body--light'}).find('a', attrs={'class': 'db-table__txt--detail_link'}).get_text(strip=True)
                 item_instances.append(instance_name)
 
     item_data = {}

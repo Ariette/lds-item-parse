@@ -1,2 +1,5 @@
-items\.txt
 \.vscode/
+.idea
+venv
+*.json
+*.tsv
